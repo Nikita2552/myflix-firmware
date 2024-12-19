@@ -1,0 +1,21 @@
+#ifndef WIFIACCESS_H
+#define WIFIACCESS_H
+
+#include <WiFi.h>
+#include <WiFiAP.h>
+#include <NetworkClient.h>
+#include "globals.h"
+#include "estimate.h"
+
+#ifdef DBG
+  #include "debug.h"
+#endif
+
+void setupWIFI();
+void readWIFI();
+void parsePCommand(NetworkClient *nclient);
+void parseCCommand(NetworkClient *nclient);
+void parsePString(String *str);
+void parseParam(String *str, const unsigned int &strnum, const unsigned int &rcnum);
+
+#endif

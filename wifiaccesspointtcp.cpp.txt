@@ -1,0 +1,145 @@
+#include "wifiaccesspoint.h"
+
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2  // Set the GPIO pin where you connected your test LED or comment this line out if your dev board has a built-in LED
+#endif
+
+NetworkServer server(80);
+
+const char *ssid = "yourAP";
+const char *password = "yourPassword";
+
+int rc[RCNUM] = {0, 0, 0, 0}; //Данные с пульта для корректировки дрона
+bool newDataFlag = false;
+
+vector<float> targetAngle{0, 0, 1};
+float thrust = 0;
+
+void setupWIFI()
+{
+#ifdef DBG
+  printDEBUG("Configuring access point...");
+#endif
+
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  if (!WiFi.softAP(ssid, password))
+  {
+    log_e("Soft AP creation failed.");
+    while (1);
+  }
+
+  IPAddress myIP = WiFi.softAPIP();
+  
+#ifdef DBG
+  printDEBUG("AP IP address: ");
+  printlnDEBUG(myIP);
+#endif
+
+  server.begin();
+
+#ifdef DBG
+  printlnDEBUG("Server started");
+#endif
+}
+
+void readWIFI()
+{
+  NetworkClient client = server.accept();  // listen for incoming clients
+
+  if (client) {                    
+    Serial.println("New Client.");
+    while (client.connected())
+    { 
+      if (client.available())
+      {
+        char command = client.read(); 
+        //printlnDEBUG(command); 
+        
+        if (command == 'P')
+        {
+          parsePCommand(&client);
+        }
+        else if (command == 'C')
+        {
+          parseCCommand(&client);
+        }
+      }
+    }
+    // close the connection:
+    client.stop();
+    Serial.println("Client Disconnected.");
+  }  
+}
+
+void parsePCommand(NetworkClient *nclient)
+{  
+  char parameter;
+  String currentLine;
+
+  while ((parameter != '.') && (currentLine.length() < 24))
+  {
+    parameter = nclient->read();
+    currentLine += parameter; 
+  }
+
+  if (parameter == '.')
+  {
+    nclient->println("P:OK");
+    printlnDEBUG(currentLine);
+    parsePString(&currentLine);
+    printlnDEBUG("parsing position is duing");
+  } 
+}
+
+void parseCCommand(NetworkClient *nclient)
+{
+  char parameter = nclient->read();  
+
+  if (parameter == '.')
+  {
+    nclient->println("C:OK");
+    callibrate();
+    //printlnDEBUG("callibration is duing");
+  }
+}
+
+void parsePString(String *str)
+{
+  if ((str->charAt(0) == ':') &&
+      (str->charAt(1) == 'Y') &&
+      (str->charAt(5) == 'R') &&
+      (str->charAt(9) == 'P') &&
+      (str->charAt(13) == 'T'))
+  {    
+    parseParam(str, 2, 0);
+    parseParam(str, 6, 1);
+    parseParam(str, 10, 2);
+    parseParam(str, 14, 3);
+
+    printlnDEBUG("rc:"+
+       String(rc[0])+", "+
+       String(rc[1])+", "+
+       String(rc[2])+", "+
+       String(rc[3])+ ";");
+
+    newDataFlag = true; 
+  } 
+}
+
+void parseParam(String *str, const unsigned int &strnum, const unsigned int &rcnum)
+{
+  if ((rcnum < RCNUM) && (strnum < str->length()))
+  {
+    String param;
+    int i;
+
+    i = 0;
+    while (i < 3)
+    {
+      param += str->charAt(strnum + i);
+      i++;
+    }
+    rc[rcnum] = param.toInt();
+  }  
+}
